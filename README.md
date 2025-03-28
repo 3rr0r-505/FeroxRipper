@@ -8,8 +8,10 @@
 [![Stars](https://img.shields.io/github/stars/3rr0r-505/FeroxRipper?style=social)](https://github.com/3rr0r-505/FeroxRipper/stargazers)
 [![Forks](https://img.shields.io/github/forks/3rr0r-505/FeroxRipper?style=social)](https://github.com/3rr0r-505/FeroxRipper/network)
 [![Last Commit](https://img.shields.io/github/last-commit/3rr0r-505/FeroxRipper)](https://github.com/3rr0r-505/FeroxRipper/commits)
+ 
+---
 
-```text
+```php
 +--------------------------------------------------------------+
 |     ______                     ____  _                       |
 |    / ____/__  _________  _  __/ __ \(_)___  ____  ___  _____ |
@@ -17,7 +19,7 @@
 |  / __/ /  __/ /  / /_/ />  </ _, _/ / /_/ / /_/ /  __/ /     |
 | /_/    \___/_/   \____/_/|_/_/ |_/_/ .___/ .___/\___/_/      |
 |                                   /_/   /_/                  |
-+--------------------------------------------------------------+                                              
++--------------------------------------------------------------+
 ```
 
 
