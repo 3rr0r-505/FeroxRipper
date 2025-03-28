@@ -9,7 +9,6 @@
 [![Forks](https://img.shields.io/github/forks/3rr0r-505/FeroxRipper?style=social)](https://github.com/3rr0r-505/FeroxRipper/network)
 [![Last Commit](https://img.shields.io/github/last-commit/3rr0r-505/FeroxRipper)](https://github.com/3rr0r-505/FeroxRipper/commits)
  
----
 
 ```php
 
