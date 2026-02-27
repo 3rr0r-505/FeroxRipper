@@ -16,12 +16,18 @@ Usage: feroxripper [options]... hash |hash string|, format |hash format|, wordli
 Options:
       -h, --hash       string      The hash string to crack (mandatory)
       -f, --format     string      Specify the hash algorithm (optional, auto-detect supported)
-      -w, --wordlist   string      Specify the wordlist file (optional, default: rockyou.txt)
+                                    Supported formats: md5, sha1, sha256, sha512, sha3-256, sha3-512, ntlm, whirlpool, md6-256, md6-512
+      -w, --wordlist   string      Specify the wordlist file (optional, default: ./wordlist/rockyou.txt if it exists, otherwise ./wordlist/wordlist.txt)
 
 Examples:
        feroxripper --hash 0df70868a807d1cc89c11a41eb5b876f -f md5 --wordlist word.txt
        feroxripper -h 03e2ad3de8d21b93a4a35517d5666ed143bf63fc -w rock.txt
        feroxripper --hash 617B17D38947695A7BE15B61395F447B
+
+Default wordlist:
+       If no --wordlist is provided, FeroxRipper will:
+         1) Use ./wordlist/rockyou.txt if it exists (e.g. unzipped from ./wordlist/rockyou.zip)
+         2) Otherwise fall back to ./wordlist/wordlist.txt (a smaller bundled wordlist in the same folder)
     "#
     );
     exit(0);
@@ -57,7 +63,7 @@ pub fn parse_args() -> Args {
             Arg::new("wordlist")
                 .short('w')
                 .long("wordlist")
-                .help("Specify the wordlist file (optional, default: rockyou.txt)")
+                .help("Specify the wordlist file (optional, default: ./wordlist/rockyou.txt if extracted from ./wordlist/rockyou.zip)")
                 .num_args(1),
         )
         .get_matches();

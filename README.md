@@ -29,19 +29,25 @@
 
 ## Features
 
-- **Multi-Algorithm Support**: Crack various hash algorithms, including MD5, SHA1, SHA256, and more.
+- **Multi-Algorithm Support**: Crack various hash algorithms, including MD5, SHA1, SHA256, SHA512, SHA3, NTLM, and Whirlpool.
 - **Dictionary Attacks**: Use custom wordlists to attempt cracking hashes.
 - **Speed & Efficiency**: Built with Rust for high performance and low latency.
 - **Extensible**: Easily extendable to add more hash algorithms or custom cracking strategies.
 
 ## Supported Hash Algorithms
 
+Currently implemented cracking support:
+
 - MD5
 - SHA1
 - SHA256
 - SHA512
-- bcrypt
-- ... and more to come!
+- SHA3-256
+- SHA3-512
+- NTLM
+- Whirlpool
+
+Hash format detection can also recognize MD6-256 and MD6-512 style hashes by length, but **MD6 cracking is not yet implemented**.
 ---
 
 ## Installation
@@ -49,6 +55,27 @@
 ### Prerequisites
 
 - Rust (>= 1.50)
+
+---
+
+## Wordlist
+
+By default, FeroxRipper looks for a wordlist in this order:
+
+1. `./wordlist/rockyou.txt` (if it exists, e.g. unzipped from `./wordlist/rockyou.zip`)
+2. `./wordlist/wordlist.txt` (a smaller wordlist included in the repository, useful for quick tests)
+
+If the repository includes a compressed wordlist at `./wordlist/rockyou.zip`, unzip it so that `rockyou.txt` is created in the same `wordlist` folder:
+
+- `./wordlist/rockyou.zip`  →  `./wordlist/rockyou.txt`
+
+You can always override the wordlist path explicitly:
+
+```bash
+feroxripper --hash <HASH> -f md5 --wordlist /path/to/your_wordlist.txt
+```
+
+Large wordlists like `rockyou.txt` are not committed to the repository in plain form due to size and licensing considerations.
 
 ---
 

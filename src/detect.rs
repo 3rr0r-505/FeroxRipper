@@ -57,3 +57,37 @@ pub fn detect_possible_hashes(hash: &str) -> Vec<HashType> {
         _ => vec![HashType::Unknown], // No common hash type matches this length
     }
 }
+
+/// Parse a user-provided hash algorithm name/alias into a `HashType`.
+/// Accepts common variants like `md5`, `MD5`, `sha-256`, `SHA256`, etc.
+pub fn parse_hash_type(name: &str) -> Option<HashType> {
+    let normalized = name.trim().to_ascii_lowercase();
+
+    let algo = match normalized.as_str() {
+        // MD5 / MD6
+        "md5" => HashType::MD5,
+        "md6" | "md6-256" | "md6_256" => HashType::MD6_256,
+        "md6-512" | "md6_512" => HashType::MD6_512,
+
+        // SHA-1
+        "sha1" | "sha-1" => HashType::SHA1,
+
+        // SHA-2
+        "sha256" | "sha-256" => HashType::SHA256,
+        "sha512" | "sha-512" => HashType::SHA512,
+
+        // SHA-3
+        "sha3" | "sha3-256" | "sha3_256" => HashType::SHA3_256,
+        "sha3-512" | "sha3_512" => HashType::SHA3_512,
+
+        // NTLM
+        "ntlm" => HashType::NTLM,
+
+        // Whirlpool
+        "whirlpool" => HashType::Whirlpool,
+
+        _ => return None,
+    };
+
+    Some(algo)
+}
