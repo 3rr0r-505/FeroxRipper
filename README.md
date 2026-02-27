@@ -10,7 +10,7 @@
 [![Last Commit](https://img.shields.io/github/last-commit/3rr0r-505/FeroxRipper)](https://github.com/3rr0r-505/FeroxRipper/commits)
  
 
-```php
+```bash
 
   +--------------------------------------------------------------+
   |     ______                     ____  _                       |
@@ -48,6 +48,7 @@ Currently implemented cracking support:
 - Whirlpool
 
 Hash format detection can also recognize MD6-256 and MD6-512 style hashes by length, but **MD6 cracking is not yet implemented**.
+
 ---
 
 ## Installation
