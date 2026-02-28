@@ -96,7 +96,7 @@ jobs:
 #          feroxripper-v1.0.0-macos-aarch64
 # ══════════════════════════════════════════════════════════════════════════════
   release:
-    name: Release - ${{ matrix.os_name }}-${{ matrix.arch }}
+    name: Build Binaries
     runs-on: ${{ matrix.runner }}
     if: github.event_name == 'release'
     permissions:
