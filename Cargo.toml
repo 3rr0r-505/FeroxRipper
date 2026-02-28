@@ -4,17 +4,25 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = { version = "4.5.34", features = ["derive"] }
-hex = "0.4.3"
-md4 = "0.10"        # replaces ntlm-hash; used for NTLM (MD4 over UTF-16LE)
-regex = "1.11.1"
-md5 = "0.7"
-sha1 = "0.10"
-sha2 = "0.10"
-sha3 = "0.10"
+clap    = { version = "4.5.34", features = ["derive"] }
+hex     = "0.4.3"
+md4     = "0.10"
+regex   = "1.11.1"
+md5     = "0.7"
+sha1    = "0.10"
+sha2    = "0.10"
+sha3    = "0.10"
 whirlpool = "0.10"
-rayon = "1.10"       # data-parallelism for wordlist cracking (replaces manual threads)
+rayon   = "1.10"
 
 [lib]
 name = "feroxripper"
 path = "src/lib.rs"
+
+# ── Release profile — maximum performance ────────────────────────────────────
+[profile.release]
+opt-level     = 3        # maximum optimisation
+lto           = "thin"   # link-time optimisation (thin is faster to compile than "fat" but still very effective)
+codegen-units = 1        # single codegen unit = better inlining across modules
+panic         = "abort"  # smaller binary, no unwinding overhead
+strip         = true     # strip debug symbols from release binary

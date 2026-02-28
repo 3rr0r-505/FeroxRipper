@@ -1,29 +1,28 @@
 #[allow(unused_imports)]
 use crate::detect::HashType;
 use hex::decode;
-use md4::{Md4, Digest as Md4Digest};
+use md4::{Digest as Md4Digest, Md4};
 use md5;
 use rayon::prelude::*;
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
 use sha3::{Sha3_256, Sha3_512};
 use std::fs::File;
-use std::io::{self, BufRead};
+use std::io::{self, Read};
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use whirlpool::Whirlpool;
 
-// Bring Digest trait into scope for .update() / .finalize() / .new_with_prefix()
 #[allow(unused_imports)]
 use sha1::digest::Digest;
 
-/// Attempts to crack `hash` by checking every word in `wordlist` against `hash_type`.
-/// Returns the plaintext password if found, otherwise `None`.
-///
-/// Uses Rayon for parallel line processing with an early-exit flag.
+// 1MB read buffer — reduces syscalls from ~17,000 to ~133 for rockyou.txt
+const BUF_SIZE: usize = 1024 * 1024;
+
+// Chunk size for parallel processing — each Rayon worker gets 2000 lines at a time,
+// avoiding the mutex contention bottleneck of par_bridge() on a raw line iterator
+const CHUNK_SIZE: usize = 2000;
+
 pub fn crack_hash(hash: &str, wordlist: &str, hash_type: HashType) -> Option<String> {
-    // Validate wordlist path up front for a clear error message
     let path = Path::new(wordlist);
     if !path.exists() {
         eprintln!("[-] Wordlist not found: {}", wordlist);
@@ -38,96 +37,94 @@ pub fn crack_hash(hash: &str, wordlist: &str, hash_type: HashType) -> Option<Str
         }
     };
 
-    // Pre-decode the hex target once so per-word comparisons are byte-level (fast).
-    // NTLM compares hex strings so it doesn't use this.
-    let decoded_target: Option<Vec<u8>> = decode(hash).ok();
+    // Pre-decode target hash bytes once — used by all algorithms except NTLM
+    let hash_lower = hash.to_ascii_lowercase();
+    let decoded_target: Option<Vec<u8>> = decode(&hash_lower).ok();
 
-    // Collect all lines into memory so Rayon can parallelise over them.
-    // For very large wordlists (rockyou, ~133 MB) this is fine — it's I/O bound anyway
-    // and we get a clean early-exit via the atomic flag.
-    let lines: Vec<String> = io::BufReader::new(file)
-        .lines()
-        .filter_map(|l| l.ok())
-        .collect();
+    // NTLM target as fixed-size byte array — enables zero-alloc byte comparison
+    let ntlm_target: Option<[u8; 16]> = decoded_target.as_deref().and_then(|b| {
+        if b.len() == 16 { b.try_into().ok() } else { None }
+    });
 
-    // Shared early-exit flag: once one thread finds the password it signals the rest to stop.
-    let found = Arc::new(AtomicBool::new(false));
+    // Resolve the hash function ONCE before the loop as a closure.
+    // This guarantees the match is never evaluated inside the hot path —
+    // the compiler cannot always prove hash_type is loop-invariant across threads.
+    let check: Box<dyn Fn(&str) -> bool + Send + Sync> = match hash_type {
+        HashType::MD5 => {
+            let t = decoded_target.clone();
+            Box::new(move |p| t.as_deref().map(|b| crack_md5(p, b)).unwrap_or(false))
+        }
+        HashType::SHA1 => {
+            let t = decoded_target.clone();
+            Box::new(move |p| t.as_deref().map(|b| crack_sha1(p, b)).unwrap_or(false))
+        }
+        HashType::SHA256 => {
+            let t = decoded_target.clone();
+            Box::new(move |p| t.as_deref().map(|b| crack_sha256(p, b)).unwrap_or(false))
+        }
+        HashType::SHA512 => {
+            let t = decoded_target.clone();
+            Box::new(move |p| t.as_deref().map(|b| crack_sha512(p, b)).unwrap_or(false))
+        }
+        HashType::SHA3_256 => {
+            let t = decoded_target.clone();
+            Box::new(move |p| t.as_deref().map(|b| crack_sha3_256(p, b)).unwrap_or(false))
+        }
+        HashType::SHA3_512 => {
+            let t = decoded_target.clone();
+            Box::new(move |p| t.as_deref().map(|b| crack_sha3_512(p, b)).unwrap_or(false))
+        }
+        HashType::NTLM => {
+            Box::new(move |p| ntlm_target.map(|t| crack_ntlm(p, &t)).unwrap_or(false))
+        }
+        HashType::Whirlpool => {
+            let t = decoded_target.clone();
+            Box::new(move |p| t.as_deref().map(|b| crack_whirlpool(p, b)).unwrap_or(false))
+        }
+        HashType::MD6_256 | HashType::MD6_512 | HashType::Unknown => {
+            Box::new(|_| false)
+        }
+    };
 
-    let result = lines
-        .par_iter()
-        .find_any(|password| {
-            // Bail out as soon as another thread has found the answer
-            if found.load(Ordering::Relaxed) {
-                return false;
-            }
+    // Read the entire file into a string buffer with a large I/O buffer.
+    // This is faster than line-by-line BufReader for large files because
+    // it does far fewer syscalls and lets us split + chunk on our own terms.
+    // Read as raw bytes first, then convert to string lossily.
+    // This handles files with non-UTF-8 encoding (e.g. Windows-1252) gracefully
+    // instead of silently returning None and skipping the entire wordlist.
+    let mut raw_bytes = Vec::new();
+    io::BufReader::with_capacity(BUF_SIZE, file)
+        .read_to_end(&mut raw_bytes)
+        .ok()?;
+    let raw = String::from_utf8(raw_bytes)
+        .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
 
-            let matched = match hash_type {
-                HashType::MD5 => decoded_target
-                    .as_deref()
-                    .map(|t| crack_md5(password, t))
-                    .unwrap_or(false),
+    // Split into lines, chunk into groups, process chunks in parallel.
+    // Each Rayon worker owns a full chunk — no mutex contention between workers.
+    let lines: Vec<&str> = raw.lines().collect();
 
-                HashType::SHA1 => decoded_target
-                    .as_deref()
-                    .map(|t| crack_sha1(password, t))
-                    .unwrap_or(false),
-
-                HashType::SHA256 => decoded_target
-                    .as_deref()
-                    .map(|t| crack_sha256(password, t))
-                    .unwrap_or(false),
-
-                HashType::SHA512 => decoded_target
-                    .as_deref()
-                    .map(|t| crack_sha512(password, t))
-                    .unwrap_or(false),
-
-                HashType::SHA3_256 => decoded_target
-                    .as_deref()
-                    .map(|t| crack_sha3_256(password, t))
-                    .unwrap_or(false),
-
-                HashType::SHA3_512 => decoded_target
-                    .as_deref()
-                    .map(|t| crack_sha3_512(password, t))
-                    .unwrap_or(false),
-
-                HashType::NTLM => crack_ntlm(password, hash),
-
-                HashType::Whirlpool => decoded_target
-                    .as_deref()
-                    .map(|t| crack_whirlpool(password, t))
-                    .unwrap_or(false),
-
-                // MD6 is not yet implemented
-                HashType::MD6_256 | HashType::MD6_512 => false,
-
-                HashType::Unknown => false,
-            };
-
-            if matched {
-                found.store(true, Ordering::Relaxed);
-            }
-            matched
+    lines
+        .par_chunks(CHUNK_SIZE)
+        .find_map_any(|chunk| {
+            chunk.iter().find(|&&pw| check(pw)).map(|s| s.to_string())
         })
-        .cloned();
-
-    result
 }
 
 // ── Individual hash functions ────────────────────────────────────────────────
 
+#[inline(always)]
 fn crack_md5(password: &str, target: &[u8]) -> bool {
-    let digest = md5::compute(password.as_bytes());
-    digest.as_ref() == target
+    md5::compute(password.as_bytes()).as_ref() == target
 }
 
+#[inline(always)]
 fn crack_sha1(password: &str, target: &[u8]) -> bool {
     let mut h = Sha1::new();
     h.update(password.as_bytes());
     h.finalize().as_slice() == target
 }
 
+#[inline(always)]
 fn crack_sha256(password: &str, target: &[u8]) -> bool {
     Sha256::new_with_prefix(password.as_bytes())
         .finalize()
@@ -135,6 +132,7 @@ fn crack_sha256(password: &str, target: &[u8]) -> bool {
         == target
 }
 
+#[inline(always)]
 fn crack_sha512(password: &str, target: &[u8]) -> bool {
     Sha512::new_with_prefix(password.as_bytes())
         .finalize()
@@ -142,12 +140,14 @@ fn crack_sha512(password: &str, target: &[u8]) -> bool {
         == target
 }
 
+#[inline(always)]
 fn crack_sha3_256(password: &str, target: &[u8]) -> bool {
     let mut h = Sha3_256::new();
     h.update(password.as_bytes());
     h.finalize().as_slice() == target
 }
 
+#[inline(always)]
 fn crack_sha3_512(password: &str, target: &[u8]) -> bool {
     let mut h = Sha3_512::new();
     h.update(password.as_bytes());
@@ -155,24 +155,36 @@ fn crack_sha3_512(password: &str, target: &[u8]) -> bool {
 }
 
 /// NTLM = MD4( UTF-16LE(password) )
-///
-/// This replaces the `ntlm-hash` crate which was limited to 31-character passwords
-/// and had no meaningful maintenance. The implementation is correct per MS-NLMP spec.
-fn crack_ntlm(password: &str, hash: &str) -> bool {
-    // Encode password as UTF-16 little-endian (what Windows uses internally)
-    let utf16le: Vec<u8> = password
-        .encode_utf16()
-        .flat_map(|c| c.to_le_bytes())
-        .collect();
+/// Stack-allocates the UTF-16LE buffer (covers passwords up to 128 UTF-16 chars).
+/// Compares digest bytes directly — zero heap allocation for the common case.
+#[inline(always)]
+fn crack_ntlm(password: &str, target: &[u8; 16]) -> bool {
+    let mut buf = [0u8; 256];
+    let mut len = 0;
+
+    for unit in password.encode_utf16() {
+        if len + 2 > buf.len() {
+            // Heap fallback for unusually long passwords (>128 UTF-16 chars)
+            let heap: Vec<u8> = password
+                .encode_utf16()
+                .flat_map(|c| c.to_le_bytes())
+                .collect();
+            let mut h = Md4::new();
+            h.update(&heap);
+            return h.finalize().as_slice() == target;
+        }
+        let bytes = unit.to_le_bytes();
+        buf[len]     = bytes[0];
+        buf[len + 1] = bytes[1];
+        len += 2;
+    }
 
     let mut h = Md4::new();
-    h.update(&utf16le);
-    let digest = h.finalize();
-
-    // Compare as lowercase hex strings (case-insensitive)
-    hex::encode(digest).eq_ignore_ascii_case(hash)
+    h.update(&buf[..len]);
+    h.finalize().as_slice() == target
 }
 
+#[inline(always)]
 fn crack_whirlpool(password: &str, target: &[u8]) -> bool {
     let mut h = Whirlpool::new();
     h.update(password.as_bytes());

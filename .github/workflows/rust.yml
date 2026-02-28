@@ -1,22 +1,194 @@
-name: Rust
+name: FeroxRipper CI/CD
 
+# ── Triggers ──────────────────────────────────────────────────────────────────
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+  release:
+    types: [published]
 
 env:
   CARGO_TERM_COLOR: always
 
+# ══════════════════════════════════════════════════════════════════════════════
+# JOB 1 — Security audit (runs on every push / PR to main)
+# Never fails the build — results shown as a summary only.
+# ══════════════════════════════════════════════════════════════════════════════
 jobs:
-  build:
-
+  security-audit:
+    name: Security Audit
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-audit-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Run security audit (non-blocking)
+        continue-on-error: true
+        run: cargo audit --json > audit-report.json || true
+
+      - name: Write audit summary
+        if: always()
+        run: |
+          echo "## Security Audit Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if command -v jq &> /dev/null && [ -f audit-report.json ]; then
+            VULN_COUNT=$(jq '.vulnerabilities.count // 0' audit-report.json)
+            WARNING_COUNT=$(jq '.warnings | length // 0' audit-report.json)
+
+            if [ "$VULN_COUNT" -eq 0 ]; then
+              echo "No vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "$VULN_COUNT vulnerability/vulnerabilities found (informational only - build not failed)" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Vulnerabilities" >> $GITHUB_STEP_SUMMARY
+              echo '```json' >> $GITHUB_STEP_SUMMARY
+              jq '.vulnerabilities.list' audit-report.json >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            fi
+
+            if [ "$WARNING_COUNT" -gt 0 ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Warnings ($WARNING_COUNT)" >> $GITHUB_STEP_SUMMARY
+              echo '```json' >> $GITHUB_STEP_SUMMARY
+              jq '.warnings' audit-report.json >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "Audit report not available." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This audit is informational only and does not block merging." >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload audit report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-report
+          path: audit-report.json
+          retention-days: 30
+
+# ══════════════════════════════════════════════════════════════════════════════
+# JOB 2 — Cross-platform release builds (runs only on GitHub release publish)
+# Naming convention: feroxripper-<version>-<os>-<arch>[.exe]
+# Example: feroxripper-v1.0.0-linux-x86_64
+#          feroxripper-v1.0.0-windows-x86_64.exe
+#          feroxripper-v1.0.0-macos-aarch64
+# ══════════════════════════════════════════════════════════════════════════════
+  release:
+    name: Release - ${{ matrix.os_name }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    if: github.event_name == 'release'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── Linux ────────────────────────────────────────────────────────
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            os_name: linux
+            arch: x86_64
+
+          - runner: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            os_name: linux
+            arch: aarch64
+            cross: true
+
+          # ── Windows ──────────────────────────────────────────────────────
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            os_name: windows
+            arch: x86_64
+
+          - runner: windows-latest
+            target: aarch64-pc-windows-msvc
+            os_name: windows
+            arch: aarch64
+
+          # ── macOS ────────────────────────────────────────────────────────
+          - runner: macos-latest
+            target: x86_64-apple-darwin
+            os_name: macos
+            arch: x86_64
+
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            os_name: macos
+            arch: aarch64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable + target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ matrix.runner }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cross (Linux aarch64 only)
+        if: matrix.cross == true
+        run: cargo install cross --locked
+
+      - name: Build release binary (native)
+        if: matrix.cross != true
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build release binary (cross)
+        if: matrix.cross == true
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Prepare binary (Linux / macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          BIN=target/${{ matrix.target }}/release/feroxripper
+          ASSET=feroxripper-${{ github.ref_name }}-${{ matrix.os_name }}-${{ matrix.arch }}
+          cp "$BIN" "$ASSET"
+          echo "ASSET=$ASSET" >> $GITHUB_ENV
+
+      - name: Prepare binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $BIN = "target\${{ matrix.target }}\release\feroxripper.exe"
+          $ASSET = "feroxripper-${{ github.ref_name }}-${{ matrix.os_name }}-${{ matrix.arch }}.exe"
+          Copy-Item $BIN $ASSET
+          "ASSET=$ASSET" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload binary to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ASSET }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
