@@ -11,44 +11,50 @@ pub struct Args {
 fn print_help() {
     println!(
         r#"
-Usage: feroxripper [options]... hash |hash string|, format |hash format|, wordlist
+FeroxRipper - Fast hash cracker written in Rust
 
-Options:
-      -h, --hash       string      The hash string to crack (mandatory)
-      -f, --format     string      Specify the hash algorithm (optional, auto-detect supported)
-                                    Supported formats: md5, sha1, sha256, sha512, sha3-256, sha3-512, ntlm, whirlpool, md6-256, md6-512
-      -w, --wordlist   string      Specify the wordlist file (optional, default: ./wordlist/rockyou.txt if it exists, otherwise ./wordlist/wordlist.txt)
+USAGE:
+    feroxripper --hash <HASH> [OPTIONS]
 
-Examples:
-       feroxripper --hash 0df70868a807d1cc89c11a41eb5b876f -f md5 --wordlist word.txt
-       feroxripper -h 03e2ad3de8d21b93a4a35517d5666ed143bf63fc -w rock.txt
-       feroxripper --hash 617B17D38947695A7BE15B61395F447B
+OPTIONS:
+    -h, --hash      <HASH>      Hash string to crack (required)
+    -f, --format    <FORMAT>    Hash algorithm (optional, auto-detected if omitted)
+    -w, --wordlist  <FILE>      Wordlist file (optional, see defaults below)
+        --help                  Show this help message
 
-Default wordlist:
-       If no --wordlist is provided, FeroxRipper will:
-         1) Use ./wordlist/rockyou.txt if it exists (e.g. unzipped from ./wordlist/rockyou.zip)
-         2) Otherwise fall back to ./wordlist/wordlist.txt (a smaller bundled wordlist in the same folder)
+SUPPORTED FORMATS:
+    md5, sha1, sha256, sha512, sha3-256, sha3-512,
+    ntlm, whirlpool, md6-256, md6-512
+
+DEFAULT WORDLIST (in order of preference):
+    1. ./wordlist/rockyou.txt   (unzip rockyou.zip first if needed)
+    2. ./wordlist/wordlist.txt  (small bundled wordlist)
+
+EXAMPLES:
+    feroxripper --hash 0df70868a807d1cc89c11a41eb5b876f -f md5 -w rockyou.txt
+    feroxripper -h 03e2ad3de8d21b93a4a35517d5666ed143bf63fc -w rock.txt
+    feroxripper --hash 617B17D38947695A7BE15B61395F447B
     "#
     );
     exit(0);
 }
 
 pub fn parse_args() -> Args {
-    // Check if the user provided --help BEFORE parsing arguments
-    let args: Vec<String> = env::args().collect();
-    if args.contains(&"--help".to_string()) {
+    // Handle --help manually before clap so our custom help is shown
+    let raw: Vec<String> = env::args().collect();
+    if raw.iter().any(|a| a == "--help") {
         print_help();
     }
 
     let matches = Command::new("FeroxRipper")
         .version("0.1.0")
-        .about("A simple hash cracker")
-        .disable_help_flag(true) // Disable automatic help flag
+        .about("Fast hash cracker written in Rust")
+        .disable_help_flag(true)
         .arg(
             Arg::new("hash")
                 .short('h')
                 .long("hash")
-                .help("The hash string to crack (mandatory)")
+                .help("Hash string to crack (required)")
                 .required(true)
                 .num_args(1),
         )
@@ -56,21 +62,21 @@ pub fn parse_args() -> Args {
             Arg::new("algo")
                 .short('f')
                 .long("format")
-                .help("Specify the hash algorithm (optional, auto-detect supported)")
+                .help("Hash algorithm (optional, auto-detected if omitted)")
                 .num_args(1),
         )
         .arg(
             Arg::new("wordlist")
                 .short('w')
                 .long("wordlist")
-                .help("Specify the wordlist file (optional, default: ./wordlist/rockyou.txt if extracted from ./wordlist/rockyou.zip)")
+                .help("Wordlist file path (optional)")
                 .num_args(1),
         )
         .get_matches();
 
     Args {
-        hash: matches.get_one::<String>("hash").unwrap().to_string(),
-        algo: matches.get_one::<String>("algo").map(|s| s.to_string()),
+        hash:     matches.get_one::<String>("hash").unwrap().to_string(),
+        algo:     matches.get_one::<String>("algo").map(|s| s.to_string()),
         wordlist: matches.get_one::<String>("wordlist").map(|s| s.to_string()),
     }
 }

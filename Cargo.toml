@@ -1,18 +1,19 @@
 [package]
 name = "feroxripper"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 clap = { version = "4.5.34", features = ["derive"] }
 hex = "0.4.3"
-ntlm-hash = "0.1.0"
+md4 = "0.10"        # replaces ntlm-hash; used for NTLM (MD4 over UTF-16LE)
 regex = "1.11.1"
 md5 = "0.7"
 sha1 = "0.10"
 sha2 = "0.10"
 sha3 = "0.10"
 whirlpool = "0.10"
+rayon = "1.10"       # data-parallelism for wordlist cracking (replaces manual threads)
 
 [lib]
 name = "feroxripper"
