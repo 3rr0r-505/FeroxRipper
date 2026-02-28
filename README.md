@@ -15,14 +15,27 @@
 
 **Fast and efficient dictionary-based hash cracker built with Rust.**
 
-[![Rust](https://img.shields.io/badge/Rust-%3E%3D1.50-orange?logo=rust&logoColor=white)](https://www.rust-lang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/3rr0r-505/FeroxRipper/blob/main/LICENSE)
-[![Latest Release](https://img.shields.io/github/v/release/3rr0r-505/FeroxRipper?color=green&label=Latest)](https://github.com/3rr0r-505/FeroxRipper/releases)
-[![CI](https://img.shields.io/github/actions/workflow/status/3rr0r-505/FeroxRipper/ci.yml?label=CI&logo=githubactions&logoColor=white)](https://github.com/3rr0r-505/FeroxRipper/actions)
-[![Issues](https://img.shields.io/github/issues/3rr0r-505/FeroxRipper?label=Issues)](https://github.com/3rr0r-505/FeroxRipper/issues)
-[![Pull Requests](https://img.shields.io/github/issues-pr/3rr0r-505/FeroxRipper?label=PRs)](https://github.com/3rr0r-505/FeroxRipper/pulls)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-informational)](https://github.com/3rr0r-505/FeroxRipper/releases)
+<!-- Language & Toolchain -->
+[![Rust](https://img.shields.io/badge/Rust-%3E%3D1.50-f74c00?logo=rust&logoColor=black)](https://www.rust-lang.org/)
+[![Cargo](https://img.shields.io/badge/Cargo-Package_Manager-f74c00?logo=rust&logoColor=black)](https://doc.rust-lang.org/cargo/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-73e4bf?logo=opensourceinitiative&logoColor=73e4bf)](https://github.com/3rr0r-505/FeroxRipper/blob/main/LICENSE)
+[![Latest Release](https://img.shields.io/github/v/release/3rr0r-505/FeroxRipper?color=green&label=Latest&logo=github&logoColor=white)](https://github.com/3rr0r-505/FeroxRipper/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/3rr0r-505/FeroxRipper/rust.yml?label=CI&logo=githubactions&logoColor=black)](https://github.com/3rr0r-505/FeroxRipper/actions)
+[![Windows](https://custom-icon-badges.demolab.com/badge/Windows-supported-0078D6?logo=windows11&logoColor=blue)](https://github.com/3rr0r-505/FeroxRipper/releases)
+[![Linux](https://img.shields.io/badge/Linux-supported-yellow?logo=linux&logoColor=black)](https://github.com/3rr0r-505/FeroxRipper/releases)
+[![macOS](https://img.shields.io/badge/macOS-supported-lightgrey?logo=apple&logoColor=black)](https://github.com/3rr0r-505/FeroxRipper/releases)
 
+<!-- Dependencies -->
+[![clap](https://img.shields.io/badge/clap-4.5-1dc77b?logo=rust&logoColor=black)](https://crates.io/crates/clap)
+[![rayon](https://img.shields.io/badge/rayon-1.10-1dc77b?logo=rust&logoColor=black)](https://crates.io/crates/rayon)
+[![sha2](https://img.shields.io/badge/sha2-0.10-1dc77b?logo=rust&logoColor=black)](https://crates.io/crates/sha2)
+[![sha3](https://img.shields.io/badge/sha3-0.10-1dc77b?logo=rust&logoColor=black)](https://crates.io/crates/sha3)
+[![sha1](https://img.shields.io/badge/sha1-0.10-1dc77b?logo=rust&logoColor=black)](https://crates.io/crates/sha1)
+[![md5](https://img.shields.io/badge/md5-0.7-1dc77b?logo=rust&logoColor=black)](https://crates.io/crates/md5)
+[![md4](https://img.shields.io/badge/md4-0.10-1dc77b?logo=rust&logoColor=black)](https://crates.io/crates/md4)
+[![whirlpool](https://img.shields.io/badge/whirlpool-0.10-1dc77b?logo=rust&logoColor=black)](https://crates.io/crates/whirlpool)
+[![hex](https://img.shields.io/badge/hex-0.4-1dc77b?logo=rust&logoColor=black)](https://crates.io/crates/hex)
+[![regex](https://img.shields.io/badge/regex-1.11-1dc77b?logo=rust&logoColor=black)](https://crates.io/crates/regex)
 </div>
 
 ---
